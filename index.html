@@ -44,6 +44,13 @@
   const ctx = canvas.getContext("2d");
   const W = canvas.width, H = canvas.height;
 
+
+  // ===== Sprites (PNG) for Alsace characters
+  const SPRITES = {
+    bretzel: (()=>{ const i=new Image(); i.src="pretzel_sprite.png"; return i; })(),
+    stork:   (()=>{ const i=new Image(); i.src="stork_sprite.png"; return i; })(),
+  };
+
   const scoreEl = document.getElementById("score");
   const timeEl  = document.getElementById("time");
   const laureateEl = document.getElementById("laureate");
@@ -65,13 +72,13 @@
   const waterY  = groundY + 46; // mer
   const DEATH_Y = waterY + 34;
 
-  // ===== Characters (stylisés)
+  // ===== Characters (Alsace)
   const CHAR = [
-    { name:"Douanier", type:"customs" },
-    { name:"Responsable export", type:"export" },
-    { name:"Olivier", type:"olivier" },
+    { name:"Bretzel", type:"bretzel" },
+    { name:"Cigogne", type:"stork" },
   ];
   let selected = 0;
+
 
   // ===== State
   const State = { PICK:"pick", RUN:"run", OVER:"over", WIN:"win" };
@@ -138,7 +145,7 @@
     }
 
     if (state===State.PICK && (e.code==="ArrowLeft" || e.code==="ArrowRight")) {
-      selected = (selected + (e.code==="ArrowRight"?1:2))%3;
+      selected = (selected + (e.code==="ArrowRight"?1:-1) + 2)%2;
       updateHUD();
     }
   }, {passive:false});
@@ -478,6 +485,45 @@
     const w = player.w, h = player.h;
     fillRect(x+6, groundY+10, w-12, 8, "#000", 0.22);
 
+    // Bretzel (Alsace)
+    if (type === "bretzel") {
+      // draw PNG sprite if loaded; fallback to simple pixels if not yet ready
+      const img = SPRITES.bretzel;
+      if (img && img.complete && img.naturalWidth) {
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, px(x-18), px(y-10), px(w+36), px(h+14));
+        ctx.imageSmoothingEnabled = true;
+      } else {
+        // fallback simple
+        fillRect(x+5, y+18, w-10, 34, "#8b5a2b", 1);
+        fillRect(x+7, y+20, w-14, 30, "#a16207", 0.95);
+        fillRect(x+w/2-8, y+30, 3, 3, "#111827", 1);
+        fillRect(x+w/2+5, y+30, 3, 3, "#111827", 1);
+      }
+      // feet for readability
+      fillRect(x+8, y+h-10, 12, 10, "#0b0f14", 1);
+      fillRect(x+w-20, y+h-10, 12, 10, "#0b0f14", 1);
+      return;
+    }
+
+    // Cigogne (Alsace)
+    if (type === "stork") {
+      const img = SPRITES.stork;
+      if (img && img.complete && img.naturalWidth) {
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, px(x-18), px(y-10), px(w+36), px(h+18));
+        ctx.imageSmoothingEnabled = true;
+      } else {
+        // fallback pixels
+        fillRect(x+8, y+h-14, 4, 14, "#f97316", 0.95);
+        fillRect(x+w-12, y+h-14, 4, 14, "#f97316", 0.95);
+        fillRect(x+6, y+26, w-12, 28, "#f8fafc", 0.98);
+        fillRect(x+w/2-7, y+10, 14, 14, "#f8fafc", 0.98);
+        fillRect(x+w/2+6, y+16, 14, 4, "#f97316", 0.98);
+      }
+      return;
+    }
+
     if (type === "customs") {
       fillRect(x+4, y+h-10, 12, 12, "#0b0f14", 1);
       fillRect(x+w-16, y+h-10, 12, 12, "#0b0f14", 1);
@@ -524,24 +570,62 @@
     drawCharacter(player.sx, player.y, CHAR[selected].type);
   }
 
+  function drawWrappedText(text, x, y, maxWidth, lineHeight){
+    const words = text.split(/\s+/);
+    let line = "";
+    const lines = [];
+    for (const w of words){
+      const test = line ? (line + " " + w) : w;
+      if (ctx.measureText(test).width > maxWidth && line){
+        lines.push(line);
+        line = w;
+      } else {
+        line = test;
+      }
+    }
+    if (line) lines.push(line);
+    for (let i=0;i<lines.length;i++){
+      ctx.fillText(lines[i], x, y + i*lineHeight);
+    }
+    return lines.length;
+  }
+
   function drawBottomText(){
-    const msg = "Evite les conteneurs, les trous, les flaques, les crochets de grues et les chariots pour gagner le trophée ! C pour changer d’entreprise.";
-    fillRect(0, H-44, W, 44, "#000", 0.40);
+    const msg = "Saut: Espace/↑ (ou Tap). Changer perso: C. Objectif: survivre 30s et gagner le trophée.";
+    fillRect(0, H-52, W, 52, "#000", 0.40);
     ctx.fillStyle = "#ffffff";
     ctx.font = "800 12px system-ui";
     ctx.textAlign = "center";
-    ctx.fillText(msg, W/2, H-18);
+    ctx.textBaseline = "alphabetic";
+
+    const maxW = W - 40;
+    const words = msg.split(/\s+/);
+    const lines = [];
+    let line = "";
+    for (const w of words){
+      const test = line ? (line + " " + w) : w;
+      if (ctx.measureText(test).width > maxW && line){
+        lines.push(line);
+        line = w;
+      } else line = test;
+    }
+    if (line) lines.push(line);
+
+    const startY = H - 30 - (lines.length-1)*14;
+    for (let i=0;i<lines.length;i++){
+      ctx.fillText(lines[i], W/2, startY + i*14);
+    }
   }
 
   // ===== Pick screen
   function getPickCards(){
-    const cardW = 240, cardH = 200, gap = 26;
-    const total = cardW*3 + gap*2;
+    const cardW = 260, cardH = 210, gap = 36;
+    const total = cardW*2 + gap;
     const sx = (W-total)/2;
     const y = H*0.34;
-    return [0,1,2].map(i=>({x:sx+i*(cardW+gap), y, w:cardW, h:cardH}));
+    return [0,1].map(i=>({x:sx+i*(cardW+gap), y, w:cardW, h:cardH}));
   }
-  function getStartBtn(){ return {x:W/2-130, y:H*0.74, w:260, h:52}; }
+  function getStartBtn(){ return {x:W/2-150, y:H*0.79, w:300, h:56}; }
 
   function handlePickTap(ev){
     const p = getCanvasPos(ev);
@@ -562,8 +646,28 @@
     drawSky(); drawCranes(); drawSea(); drawRoad(); drawBottomText();
     fillRect(0,0,W,H,"#000",0.18);
 
+    // Consignes lisibles avant de démarrer
+    const rules = "Evite les conteneurs, les trous, les flaques, les crochets de grues et les chariots. Appuie sur Espace/↑ (ou Tap) pour sauter. Sur mobile: touche l’écran. Objectif: survivre 30 secondes et gagner le trophée !";
+    const box = { x: W*0.10, y: H*0.08, w: W*0.80, h: H*0.20 };
+    fillRect(box.x, box.y, box.w, box.h, "#0b0f14", 0.78);
+    ctx.strokeStyle = "rgba(255,255,255,0.22)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px(box.x), px(box.y), px(box.w), px(box.h));
+
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.font = "900 20px system-ui";
+    ctx.fillText("Consignes", W/2, box.y + 34);
+
+    ctx.font = "700 14px system-ui";
+    ctx.fillStyle = "rgba(255,255,255,0.95)";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    drawWrappedText(rules, W/2, box.y + 60, box.w - 48, 18);
+
+
     const cards = getPickCards();
-    for (let i=0;i<3;i++){
+    for (let i=0;i<2;i++){
       const c = cards[i];
       fillRect(c.x, c.y, c.w, c.h, "#ffffff", 0.97);
       ctx.strokeStyle = (i===selected) ? "#1f6feb" : "#cbd5e1";
